@@ -3,7 +3,7 @@
 This is a lua conversion of the original [chromebook-linux-audio](https://github.com/WeirdTreeThing/chromebook-linux-audio) script.
 May not get updated so you should use the original.
 # Instructions
-1.     git clone https://github.com/WeirdTreeThing/chromebook-linux-audio
+1.     git clone https://github.com/CoolPenguin27/lua-chromebook-linux-audio
 2.     cd chromebook-linux-audio
 3.     ./setup-audio
 
