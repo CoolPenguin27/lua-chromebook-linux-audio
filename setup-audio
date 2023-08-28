@@ -1,0 +1,426 @@
+#!/usr/bin/env lua
+
+--# By SuperPenguin34
+--# kinda did this as a joke lol
+--# important stuff
+local utils = require("utils")
+--# get utils module aka the functions.py of the script
+local board_generations = utils.json.decode(utils:read_file("conf/board-generations.json"))
+
+local SOF_Platforms = {
+    glk = "glk",
+    cml = "cml",
+    jsl = "jsl",
+    tgl = "tgl",
+    adl = "adl"
+}
+
+local AVS_Platforms = {
+    skl = "skl", 
+    kbl = "kbl"
+}
+
+local Bras_Platforms = {
+    bdw = "bdw",
+    byt = "byt",
+    bsw = "bsw"
+}
+
+local AMD_Platforms = {
+    stoney = 1,
+    picasso = 2,
+    cezanne = 3,
+    mendocino = 4
+}
+--# all platform dictionaries
+
+local SOF_Card_Folders = {
+    apl = {"sof-bxtda7219ma"},
+    glk = {"sof-glkda7219ma", "sof-cs42l42", "sof-glkrt5682ma"},
+    cml = {"sof-rt5682", "sof-cmlda7219ma", "sof-cml_rt1011_", "sof-cml_max9839"},
+    tgl = {"sof-rt5682"},
+    jsl = {"sof-rt5682", "sof-da7219max98", "sof-cs42l42"},
+    adl = {"sof-rt5682", "sof-nau8825", "sof-ssp_amp"}
+}
+
+local AMD_Card_Folders = {
+    stoney = {"sof-bxtda7219ma"},
+    picasso = {"acp3xalc5682m98", "acp3xalc5682101"},
+    cezanne = {"sof-rt5682s-rt1"},
+    mendocino = {"sof-rt5682s-hs-"}
+}
+--# the folder location of the sound cards in the ucm folder
+
+
+local Current_CLArgs = {}
+--# current args for the session
+local libasound2_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2_1.2.8-1pop1~1669155503~22.04~a04c9a1_amd64.deb"
+local libasound2_data_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2-data_1.2.8-1pop1~1669155503~22.04~a04c9a1_all.deb"
+local linux_image_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/d567a383cdc8686afc378a00b4cc35293fd3bc4d/linux-image-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1690928105~22.04~d567a38_amd64.deb"
+local linux_modules_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/d567a383cdc8686afc378a00b4cc35293fd3bc4d/linux-modules-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1690928105~22.04~d567a38_amd64.deb"
+--# ubuntu 22.04 stuff 
+local apl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/apl/dsp_basefw.bin"
+local skl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/skl/dsp_basefw.bin"
+--# avs stuff
+local kernel_version = utils:CleanString(string.lower(utils:RunCommand("uname -r")))
+--# just in case
+-------------------------------------
+
+
+
+function SOF_Audio(platform)
+    if Current_CLArgs["debug"] ~= nil then
+        if Current_CLArgs["debug"] == true then
+            utils:print_status("Enabling SOF Debugging")
+            utils:copy_file("conf/sof/snd-sof-dbg.conf", "/etc/modprobe.d/snd-sof-dbg.conf")
+
+            else
+            utils:print_status("Disabling SOF Debugging")
+            utils:remove_folder("/etc/modprobe.d/snd-sof-dbg.conf")
+
+        end
+
+        utils:print_status("Done, please reboot for changes to take effect.")
+        os.exit(true)
+    end
+
+    utils:print_status("Installing SOF")
+    utils:print_status("Installing SOF firmware")
+    
+    utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
+    --# install required packages
+    if utils.distro == "ubuntu" then
+        --# linux-firmware has different names on ubuntu (and ubuntu based distro's like popOS)
+        utils:install_package(nil, "linux-firmware")
+    else
+        utils:install_package("linux-firmware", "firmware-linux-free firmware-linux-nonfree", "linux-firmware", "kernel-firmware-all", "linux-firmware")
+    end
+
+    utils:install_package("alsa-utils", "alsa-utils", "alsa-utils", "alsa-utils", "alsa-utils")
+
+    --# force the SOF Driver
+    utils:print_status("Installing modprobe config")
+    utils:copy_file("conf/sof/snd-sof.conf", "/etc/modprobe.d/snd-sof.conf")
+
+
+    utils:print_status("Installing UCM configuration")
+    utils:remove_folder("/tmp/chromebook-ucm-conf")
+    --# remove existing ucm folder
+    utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf /tmp/chromebook-ucm-conf")
+
+    for index, folder in ipairs(SOF_Card_Folders[platform]) do
+        utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
+        --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
+    end
+
+    if platform == "jsl" then
+        --# JSL also needs a tplg build from upstream which have not been shipped in distros yet
+        utils:copy_dir("conf/sof/tplg ", "/lib/firmware/intel/sof-tplg")
+    end
+
+    --# Common dmic split ucm
+    utils:copy_dir("/tmp/chromebook-ucm-conf/dmic-common", "/usr/share/alsa/ucm2/conf.d/dmic-common")
+
+    --# Common hdmi configurations
+    utils:copy_dir("/tmp/chromebook-ucm-conf/hdmi-common ", "/usr/share/alsa/ucm2/conf.d/hdmi-common")
+    
+end
+
+function AVS_Audio(platform)
+    if Current_CLArgs["debug"] ~= nil then
+        if Current_CLArgs["debug"] == true then
+            utils:print_status("Enabling AVS Debugging")
+            utils:copy_file("conf/avs/snd-avs-dbg.conf", "/etc/modprobe.d/snd-avs-dbg.conf")
+
+            else
+            utils:print_status("Disabling AVS Debugging")
+            utils:remove_folder("/etc/modprobe.d/snd-avs-dbg.conf")
+        end
+
+        utils:print_status("Done, please reboot for changes to take effect.")
+        os.exit(true)
+    end
+
+    utils:print_status("Installing AVS")
+
+    local override_avs = false
+
+    if utils:check_file_exists("/sys/bus/acpi/devices/MX98357A:00") then
+        --# fun thing, the license states that the software maker is not liable to damages
+        if Current_CLArgs["force_avs_install"] then
+            utils:print_error("WARNING: Your device has max98357a and can cause permanent damage to your speakers if you set the volume too loud!")
+            while true do
+
+                utils:print_question('Type "I understand the risk of permanently damaging my speakers" in all caps to continue: ')
+        
+                local selection = io.read()
+        
+                if selection == "I UNDERSTAND THE RISK OF PERMANENTLY DAMAGING MY SPEAKERS" then
+                    override_avs = true
+                    break
+                end
+
+                --# waiting for confirmation
+
+            end
+
+            else
+                utils:print_error("WARNING: Your device has max98357a and can cause permanent damage to your speakers if you set the volume too loud! \nAs a safety precaution devices with max98357a have speakers disabled until a fix is in place.\n Headphones and HDMI audio are safe from this.")
+                utils:print_question("If you want to disable this check, restart the script with --force-avs-install")
+
+                while true do
+                
+                    utils:print_question('Type "I Understand my speakers will not work since my device has max98357a!" in all caps to continue: ')
+            
+                    local selection = io.read()
+            
+                    if selection == "I UNDERSTAND MY SPEAKERS WILL NOT WORK SINCE MY DEVICE HAS MAX98357A!" then
+                        override_avs = false
+                        break
+                    end
+                    --# waiting for confirmation
+                end
+            end
+
+
+    end
+
+    --# boring confusing if statement over now for the real stuff
+    utils:print_status("Installing UCM configuration")
+    utils:remove_folder("/tmp/chromebook-ucm-conf")
+    --# remove existing ucm folder
+    utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf /tmp/chromebook-ucm-conf")
+    utils:copy_dir("/tmp/chromebook-ucm-conf/avs", "/lib/firmware/intel/avs")
+
+    utils:print_status("Installing topology")
+    utils:copy_dir("conf/avs/tplg", "/usr/share/alsa/ucm2/conf.d")
+    utils:print_status("Installing modprobe config")
+    utils:copy_file("conf/avs/snd-avs.conf", "/etc/modprobe.d/snd-avs.conf")
+
+    if utils:check_file_exists("/usr/bin/wireplumber") then
+        --# installs wireplumber config if wireplumber is installed
+        utils:print_status("Forcing avs_dmic to use S16LE format")
+    
+        utils:mk_dir("etc/wireplumber/main.lua.d/")
+        --# just to make sure those directories exist
+    
+        utils:copy_file("conf/avs/51-avs-dmic.lua", "/etc/wireplumber/main.lua.d/51-avs-dmic.lua")
+    end
+
+    --# updated avs dsp firmware recently got merged upstream but is not packaged in any distro yet
+    utils:print_status("Installing AVS firmware")
+
+    utils:mk_dir("/lib/firmware/intel/avs/skl")
+    utils:mk_dir("/lib/firmware/intel/avs/apl")
+
+    utils:download_file(apl_dsp, "/lib/firmware/intel/avs/apl/dsp_basefw.bin")
+    utils:download_file(skl_dsp, "/lib/firmware/intel/avs/skl/dsp_basefw.bin")
+
+    --# remove topology file untill working volume limiter or user is willing to take the risk
+    if not override_avs then
+        utils:remove_folder("/lib/firmware/intel/avs/max98357a-tplg.bin")
+    end
+    
+    if not utils:check_file_exists("/lib/modules/"..kernel_version.."/kernel/sound/soc/intel/avs") then
+        --# if avs modules doesnt exist for currently running kernel
+        utils:print_error("Looks like your kernel doesn't have the avs modules. Make sure you are on at least 6.0 with avs enabled!")
+        os.exit(false)
+    end
+
+    --# time to move back to the main thread
+end
+
+function AMD_Audio(platform, id)
+    --# 0 = stoneyridge (grunt)
+    --# 1 = picasso/zen+ (zork)
+    --# 2 = cezanne/zen3 (guybrush)
+    --# 3 = mendocino/zen2 (skyrim)
+    
+    if id >= 3 then
+       utils:print_status("Installing SOF firmware")
+       utils:mk_dir("/lib/firmware/amd/sof/community")
+       utils:mk_dir("/lib/firmware/amd/sof-tplg")
+       --# prepare and create new directories
+
+       utils:print_status("Installing modprobe config")
+       utils:copy_file("conf/amd-sof/mdn-sof.conf", "/etc/modprobe.d/mdn-sof.conf")
+    end
+
+    utils:print_status("Installing UCM configuration")
+    utils:remove_folder("/tmp/chromebook-ucm-conf")
+    utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf /tmp/chromebook-ucm-conf")
+
+    for index, folder in ipairs(SOF_Card_Folders[platform]) do
+        utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
+        --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
+    end
+    --# Common dmic split ucm
+    utils:copy_dir("/tmp/chromebook-ucm-conf/dmic-common", "/usr/share/alsa/ucm2/conf.d/dmic-common")
+
+end
+function Bras_Audio(platform)
+    if Current_CLArgs["debug"] ~= nil then
+        if Current_CLArgs["debug"] == true then
+            utils:print_status("Enabling SOF BSW debugging")
+            utils:copy_file("conf/sof/bsw-sof-dbg.conf", "/etc/modprobe.d/bsw-sof-dbg.conf")
+
+            else
+            utils:print_status("Disabling SOF BSW debugging")
+            utils:remove_folder("/etc/modprobe.d/bsw-sof-dbg.conf")
+        end
+
+        utils:print_status("Done, please reboot for changes to take effect.")
+        os.exit(true)
+    end
+
+    utils:print_status("Fixing braswell/baytrail/broadwell audio")
+
+    utils:install_package("alsa-ucm-conf", "alsa-ucm-conf", "alsa-ucm-conf", "alsa-ucm-conf", "alsa-ucm-conf")
+    utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
+    
+    utils:copy_file("conf/sof/bsw-sof.conf", "/etc/modprobe.d/bsw-sof.conf")
+
+end
+
+function APL_Audio(platform)
+    utils:print_status("Apollolake has two audio drivers!")
+    utils:print_status("SOF: Stable, but doesn't work with headphones.")
+    utils:print_status("AVS: Unstable, can damage speakers, but works with all audio hardware.")
+    utils:print_error("Speakers are disabled on AVS as a safety precaution. (use --force-avs-install to override) \nSpeakers will still work on SOF Though.")
+    while true do
+        utils:print_question("Which driver would you like to use? [SOF/AVS]")
+
+        local selection = io.read()
+
+        if string.lower(selection) == "SOF" then
+            utils:print_status("Using SOF.")
+            os.remove("/etc/modprobe.d/snd-avs.conf")
+            SOF_Audio("apl")
+            utils:copy_file("conf/sof/apl-sof.conf", "/etc/modprobe.d/apl-sof.conf")
+            break
+
+            elseif string.lower(selection) == "AVS" then
+                utils:print_status("Using AVS.")
+                os.remove("/etc/modprobe.d/snd-sof.conf")
+                os.remove("/etc/modprobe.d/apl-sof.conf")
+                AVS_Audio(platform)
+                break
+
+            else
+
+            utils:print_error("Invalid option: "..selection)
+
+        end
+
+    end
+end
+
+function HandleCLArgs()
+    for index, args in ipairs(arg) do
+        if args == "-b" then
+            Current_CLArgs["board_name"] = arg[index + 1]
+            print(Current_CLArgs["board_name"])
+
+            elseif args == "--enable-debug" or args == "--disable-debug" then
+            Current_CLArgs["debug"] = (args == "--enable-debug") or false
+
+            elseif args == "--force-avs-install" then
+            Current_CLArgs["force_avs_install"] = true
+
+            elseif Current_CLArgs["board_name"] == args then
+                --# make sure it doesnt exit the script
+                
+            else
+            print("Invalid Paramater: "..args)
+            print("current paramaters: \n -b new_board_name (force board_name) \n --enable-debug (enable audio debugging) \n --disable-debug (disable audio debugging) \n --force-avs-install (DANGEROUS: Force enable AVS install. MIGHT CAUSE PERMANENT DAMAGE TO SPEAKERS!) ")
+            os.exit(false)
+
+        end
+    end
+end
+
+-------------------------------------
+HandleCLArgs()
+
+utils:print_warning("Please note that this version of the script may not get updated, please use the original version here: https://github.com/WeirdTreeThing/chromebook-linux-audio")
+utils:print_header("Press enter to continue.")
+local enter = io.read()
+-------------------------------------
+local is_root = utils:RunCommand("echo $EUID")
+--# for some reason os.getenv doesnt work for this check.
+local sys_board = Current_CLArgs["board_name"] or utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")))
+
+if sys_board == Current_CLArgs["board_name"] then
+    utils:print_warning("Board name overriden to: "..sys_board)
+end
+
+if is_root ~= 0 then
+    print("This script must be ran with Sudo/Root permissions!")
+    os.exit(false)
+end
+
+is_root = nil
+enter = nil
+--# check over, start actual stuff
+--------------------------------------
+
+utils:print_warning("WARNING: this audio script is not fully functional yet!")
+local curr_board = board_generations[sys_board]
+
+if curr_board == nil then
+    --# doesnt exist
+    print("Unknown/Unsupported Platform: "..sys_board)
+    os.exit(false)
+end
+--# if its not there dont bother
+
+if SOF_Platforms[curr_board] then
+    SOF_Audio(curr_board)
+
+    elseif AVS_Platforms[curr_board] then
+        AVS_Audio(curr_board)
+
+    elseif AMD_Platforms[curr_board] then
+        AMD_Audio(curr_board, AMD_Platforms[curr_board])
+
+    elseif Bras_Platforms[curr_board] then
+        Bras_Audio(curr_board)
+
+    elseif curr_board == "apl" then    
+        APL_Audio(curr_board)
+end
+
+if utils.distro == "debian" then
+    utils:print_error("WARNING: Debian users will most likely need a custom kernel for functional audio. \nSee https://github.com/WeirdTreeThing/chromebook-linux-audio/issues/18")
+end
+
+--# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
+if utils.is_jammy then
+    utils:print_status("Updating libasound2")
+    
+    --# might need curl
+    utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
+    utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
+    utils:RunCommand("apt install /tmp/libasound2*.deb")
+
+    utils:print_status("Updating linux kernel")
+    utils:download_file(linux_image_url, "/tmp/linux_image.deb")
+    utils:download_file(linux_modules_url, "/tmp/linux_modules.deb")
+
+    utils:RunCommand("apt install /tmp/linux_*.deb")
+end
+
+if utils:check_file_exists("/usr/bin/wireplumber") then
+    --# installs wireplumber config to increase headroom
+    --# fixes instanbility and crashes of multiple devices
+    utils:print_status("Increasing alsa headroom (fixes instability)")
+
+    utils:mk_dir("/etc/wireplumber/main.lua.d/")
+    --# just to make sure those directories exist
+
+    utils:copy_file("conf/common/51-increase-headroom.lua", "/etc/wireplumber/main.lua.d/51-increase-headroom.lua")
+end
+
+utils:print_header("Audio installed successfully! Reboot to finish setup.")
+os.exit(true)
+--# switch states dont exist in lua, just regular if statements
