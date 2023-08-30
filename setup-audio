@@ -123,7 +123,8 @@ function SOF_Audio(platform)
 
     --# Common hdmi configurations
     utils:copy_dir("/tmp/chromebook-ucm-conf/hdmi-common ", "/usr/share/alsa/ucm2/conf.d/hdmi-common")
-    
+
+    --# time to move back to the main thread
 end
 
 function AVS_Audio(platform)
@@ -250,13 +251,14 @@ function AMD_Audio(platform, id)
     utils:remove_folder("/tmp/chromebook-ucm-conf")
     utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf /tmp/chromebook-ucm-conf")
 
-    for index, folder in ipairs(SOF_Card_Folders[platform]) do
+    for index, folder in ipairs(AMD_Card_Folders[platform]) do
         utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
         --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
     end
     --# Common dmic split ucm
     utils:copy_dir("/tmp/chromebook-ucm-conf/dmic-common", "/usr/share/alsa/ucm2/conf.d/dmic-common")
 
+    --# time to move back to the main thread
 end
 function Bras_Audio(platform)
     if Current_CLArgs["debug"] ~= nil then
@@ -279,7 +281,7 @@ function Bras_Audio(platform)
     utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
     
     utils:copy_file("conf/sof/bsw-sof.conf", "/etc/modprobe.d/bsw-sof.conf")
-
+    --# time to move back to the main thread
 end
 
 function APL_Audio(platform)
