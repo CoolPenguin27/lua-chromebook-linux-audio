@@ -8,7 +8,7 @@ May not get updated so you should use the original.
 3.     ./setup-audio
 
 # Requirements
-1. 'git'
+1. `git`
 2. `lua 5.1`
 
 # Supported Devices
