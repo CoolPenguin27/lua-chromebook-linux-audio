@@ -1,14 +1,10 @@
 --# a module script thats kinda like a port of the functions.py
---# anyways who owns the original functions.py?
 
 --# By SuperPenguin34
 local utils = {}
-local json = require("json")
 
 utils.distro = "unknown"
 utils.is_jammy = false
-utils.json = json
---# expose luajson just in case
 
 function utils:RunCommand(command, use_os_execute)
 --# stack overflow https://stackoverflow.com/questions/9676113/lua-os-execute-return-value
@@ -29,13 +25,14 @@ end
 
 function utils:CleanString(string)
     --# i figured this out because my RunCommand(product_name) wasnt matching up with a board (and if sys_board == "delbin" didnt work)
-    local new_string = string.gsub(string, "\n 1", "")
-    new_string = string.gsub(string, " ", "")
     local new_string = string.gsub(string, "\n", "")
+    new_string = string.gsub(new_string, " ", "")
+    new_string = string.gsub(new_string, '"', "")
+    new_string = string.gsub(new_string, ",", "")
     return new_string
 end
 
-function utils:read_file(string)
+function utils:read_file(string, enable_table)
     --# opens said file and reads it
     local handle = io.open(string, "r")
     if not handle then
@@ -196,9 +193,6 @@ function utils:print_header(string)
     print("\27[95m" .. string .. "\27[0m")
 end
 
-function utils:print_question(string)
-    print("\27[92m" .. string .. "\27[0m")
-end
 
 CacheDistro()
 return utils

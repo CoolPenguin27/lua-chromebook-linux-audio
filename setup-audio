@@ -5,7 +5,7 @@
 --# important stuff
 local utils = require("utils")
 --# get utils module aka the functions.py of the script
-local board_generations = utils.json.decode(utils:read_file("conf/board-generations.json"))
+local board_generations = {}
 
 local SOF_Platforms = {
     glk = "glk",
@@ -56,14 +56,14 @@ local Current_CLArgs = {}
 --# current args for the session
 local libasound2_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2_1.2.8-1pop1~1669155503~22.04~a04c9a1_amd64.deb"
 local libasound2_data_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2-data_1.2.8-1pop1~1669155503~22.04~a04c9a1_all.deb"
-local linux_image_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/d567a383cdc8686afc378a00b4cc35293fd3bc4d/linux-image-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1690928105~22.04~d567a38_amd64.deb"
-local linux_modules_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/d567a383cdc8686afc378a00b4cc35293fd3bc4d/linux-modules-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1690928105~22.04~d567a38_amd64.deb"
+local linux_image_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/5597803fc39fa47723338c9b5aaab1c175dc4f52/linux-modules-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1692717645~22.04~5597803_amd64.deb"
+local linux_modules_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/5597803fc39fa47723338c9b5aaab1c175dc4f52/linux-modules-6.4.6-76060406-generic_6.4.6-76060406.202307241739~1692717645~22.04~5597803_amd64.deb"
 --# ubuntu 22.04 stuff 
 local apl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/apl/dsp_basefw.bin"
 local skl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/skl/dsp_basefw.bin"
 --# avs stuff
 local kernel_version = utils:CleanString(string.lower(utils:RunCommand("uname -r")))
---# just in case
+--# have easy access to the current running kernel version
 -------------------------------------
 
 
@@ -86,7 +86,6 @@ function SOF_Audio(platform)
 
     utils:print_status("Installing SOF")
     utils:print_status("Installing SOF firmware")
-    
     utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
     --# install required packages
     if utils.distro == "ubuntu" then
@@ -136,6 +135,7 @@ function AVS_Audio(platform)
             else
             utils:print_status("Disabling AVS Debugging")
             utils:remove_folder("/etc/modprobe.d/snd-avs-dbg.conf")
+
         end
 
         utils:print_status("Done, please reboot for changes to take effect.")
@@ -143,7 +143,6 @@ function AVS_Audio(platform)
     end
 
     utils:print_status("Installing AVS")
-
     local override_avs = false
 
     if utils:check_file_exists("/sys/bus/acpi/devices/MX98357A:00") then
@@ -260,6 +259,7 @@ function AMD_Audio(platform, id)
 
     --# time to move back to the main thread
 end
+
 function Bras_Audio(platform)
     if Current_CLArgs["debug"] ~= nil then
         if Current_CLArgs["debug"] == true then
@@ -317,21 +317,41 @@ function APL_Audio(platform)
     end
 end
 
+function PreloadBoardDict()
+    --# parsing the json file without any special modules
+    for line in io.lines("conf/board-generations.json") do
+        if line == "{" or line == "}" then
+            --# skip 
+            goto continue
+        end
+
+        local otherhalf = string.sub(line, (string.find(line, ":") + 1), string.len(line))
+        --# get line of value
+        line = string.sub(line, 1, (string.find(line, ":") - 1))
+        --# get line of key 
+
+        line = utils:CleanString(line)
+        otherhalf = utils:CleanString(otherhalf)
+    
+        board_generations[line] = otherhalf
+
+        ::continue::
+    end
+end
+
 function HandleCLArgs()
     for index, args in ipairs(arg) do
         if args == "-b" then
             Current_CLArgs["board_name"] = arg[index + 1]
-            print(Current_CLArgs["board_name"])
 
             elseif args == "--enable-debug" or args == "--disable-debug" then
             Current_CLArgs["debug"] = (args == "--enable-debug") or false
 
-            elseif args == "--force-avs-install" then
+            elseif args == "--      force-avs-install" then
             Current_CLArgs["force_avs_install"] = true
 
             elseif Current_CLArgs["board_name"] == args then
-                --# make sure it doesnt exit the script
-                
+                --# make sure it isnt counted as an argument
             else
             print("Invalid Paramater: "..args)
             print("current paramaters: \n -b new_board_name (force board_name) \n --enable-debug (enable audio debugging) \n --disable-debug (disable audio debugging) \n --force-avs-install (DANGEROUS: Force enable AVS install. MIGHT CAUSE PERMANENT DAMAGE TO SPEAKERS!) ")
@@ -342,6 +362,7 @@ function HandleCLArgs()
 end
 
 -------------------------------------
+PreloadBoardDict()
 HandleCLArgs()
 
 utils:print_warning("Please note that this version of the script may not get updated, please use the original version here: https://github.com/WeirdTreeThing/chromebook-linux-audio")
@@ -351,7 +372,6 @@ local enter = io.read()
 local is_root = utils:RunCommand("echo $EUID")
 --# for some reason os.getenv doesnt work for this check.
 local sys_board = Current_CLArgs["board_name"] or utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")))
-
 if sys_board == Current_CLArgs["board_name"] then
     utils:print_warning("Board name overriden to: "..sys_board)
 end
@@ -367,6 +387,7 @@ enter = nil
 --------------------------------------
 
 utils:print_warning("WARNING: this audio script is not fully functional yet!")
+
 local curr_board = board_generations[sys_board]
 
 if curr_board == nil then
@@ -390,6 +411,7 @@ if SOF_Platforms[curr_board] then
 
     elseif curr_board == "apl" then    
         APL_Audio(curr_board)
+        
 end
 
 if utils.distro == "debian" then
@@ -398,18 +420,20 @@ end
 
 --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
 if utils.is_jammy then
-    utils:print_status("Updating libasound2")
+    utils:print_status("Updating libasound2 (might take a while)")
     
     --# might need curl
     utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
     utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
     utils:RunCommand("apt install /tmp/libasound2*.deb")
 
-    utils:print_status("Updating linux kernel")
-    utils:download_file(linux_image_url, "/tmp/linux_image.deb")
-    utils:download_file(linux_modules_url, "/tmp/linux_modules.deb")
-
-    utils:RunCommand("apt install /tmp/linux_*.deb")
+    if string.find(string.sub(kernel_version, 1, 2), "5.") then
+        --# if on a 5.X kernel then update
+        utils:print_status("Updating linux kernel (might take a while)")
+        utils:download_file(linux_image_url, "/tmp/linux_image.deb")
+        utils:download_file(linux_modules_url, "/tmp/linux_modules.deb")
+        utils:RunCommand("apt install /tmp/linux_*.deb")
+    end
 end
 
 if utils:check_file_exists("/usr/bin/wireplumber") then
@@ -425,4 +449,3 @@ end
 
 utils:print_header("Audio installed successfully! Reboot to finish setup.")
 os.exit(true)
---# switch states dont exist in lua, just regular if statements

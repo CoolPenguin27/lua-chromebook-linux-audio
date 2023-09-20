@@ -10,7 +10,6 @@ May not get updated so you should use the original.
 # Requirements
 1. 'git'
 2. `lua 5.1`
-3. ['lua-json'](https://luarocks.org/modules/neoxic/lua-json)
 
 # Supported Devices
 See the [Linux compatibility sheet](https://docs.google.com/spreadsheets/d/1udREts28cIrCL5tnPj3WpnOPOhWk76g3--tfWbtxi6Q/edit#gid=0) for more info.
@@ -29,7 +28,7 @@ See the [Linux compatibility sheet](https://docs.google.com/spreadsheets/d/1udRE
 
 [^2]: Debian will require a custom kernel.
 
-For both Debian and PopOS, you can get a custom kernel [here](https://elly.rocks/tmp/BUILDROOT/linux-image-6.1.27chrultrabook-fixups_6.1.27chrultrabook-fixups-8_amd64.deb).
+For both Debian and PopOS, you can get a custom kernel [here](https://tree123.org/chrultrabook/debian-kernel/linux-image-6.5.4-chrultrabook_6.5.4-1_amd64.deb).
 
 # Other Distros
 Other distros will likely work but will require you to manually install packages.
