@@ -32,7 +32,7 @@ function utils:CleanString(string)
     return new_string
 end
 
-function utils:read_file(string, enable_table)
+function utils:read_file(string)
     --# opens said file and reads it
     local handle = io.open(string, "r")
     if not handle then
