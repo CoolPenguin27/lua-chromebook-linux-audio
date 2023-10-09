@@ -4,22 +4,20 @@
 local utils = {}
 
 utils.distro = "unknown"
-utils.is_jammy = false
-
-function utils:RunCommand(command, use_os_execute)
---# stack overflow https://stackoverflow.com/questions/9676113/lua-os-execute-return-value
-    if use_os_execute then
-        local success = os.execute(command.." > /dev/null")
-        return success
-    end
+utils.distro_codename = "unknown"
+function utils:RunCommand(command, only_output)
+--# stack overflow https://stackoverflow.com/questions/7607384/getting-return-status-and-program-output
     local handle = io.popen(command)
     --# get popen handle
-    local result = handle:read("a")
+    local output = handle:read("a")
     --# read the result
-    handle:close()
+    local success = handle:close()
     --# close handle
-
-    return tonumber(result) or tostring(result)
+    if only_output then
+        return (tonumber(output) or tostring(output))
+        else
+        return success, (tonumber(output) or tostring(output))
+    end
     --# easy way to remove those werid indents when getting the result
 end
 
@@ -36,7 +34,7 @@ function utils:read_file(string)
     --# opens said file and reads it
     local handle = io.open(string, "r")
     if not handle then
-        utils:print_error("error reading file: "..string)
+        utils:print_error("Error reading file: "..string)
         os.exit(false)
     end
     local result = handle:read("a")
@@ -51,10 +49,10 @@ function utils:check_file_exists(string)
     if not success then
         if code == 13 then
             --# permission only got denied, its there though
-            return true, error, code
+            return true
         end
     end
-    return success, error, code
+    return success
 end
 
 function utils:remove_folder(folder)
@@ -62,7 +60,7 @@ function utils:remove_folder(folder)
     local success = os.remove(folder)
     if not success then
         --# werid feeling this will cause a github issue
-       return utils:RunCommand("rm -r "..folder, true)
+       return utils:RunCommand("rm -r "..folder)
        --# feel like something with /dev/null might screw something up
     end
     return true
@@ -92,7 +90,7 @@ end
 
 function utils:copy_dir(og_dir, new_dir)
     --# opens said file and reads it
-    if not utils:RunCommand("cp -r "..og_dir.." "..new_dir, true) then
+    if not utils:RunCommand("cp -r "..og_dir.." "..new_dir) then
         utils:print_error("error copying "..og_dir.." to "..new_dir)
         os.exit(false)
     end
@@ -101,7 +99,12 @@ end
 
 function utils:mk_dir(new_directory)
     --# opens said file and reads it
-    return utils:RunCommand("mkdir -p "..new_directory, true)
+    local success = utils:RunCommand("mkdir -p "..new_directory)
+    if not success then
+        utils:print_error("Error making directory path "..new_directory.." exiting")
+        os.exit(false)
+    end
+    return true
 end
 
 function utils:download_file(url, filename)
@@ -110,37 +113,39 @@ function utils:download_file(url, filename)
         utils:print_error("curl not installed, stopping download")
         os.exit(false)
     end
-    local success = utils:RunCommand("curl "..url.." --output "..filename, true)
+    local success = utils:RunCommand("curl "..url.." --output "..filename)
 
     if not success then
-        utils:print_error("Error Downloading file, exiting")
+        utils:print_error("Error Downloading file: "..filename..", exiting")
         os.exit(false)
     end
     return success
 end
 
-
 function utils:install_package(arch_package, deb_package, rpm_package, suse_package, void_package)
-
+    local success = false
     if utils.distro == "arch" then
-        utils:RunCommand("pacman -S --noconfirm --needed "..arch_package)
+        success = utils:RunCommand("pacman -S --noconfirm --needed "..arch_package)
 
     elseif utils.distro == "void" then
-        utils:RunCommand("xbps-install -y "..void_package)
+        success = utils:RunCommand("xbps-install -y "..void_package)
 
     elseif utils.distro == "ubuntu" or utils.distro == "debian" then
-        utils:RunCommand("apt-get install -y "..deb_package)
+        success = utils:RunCommand("apt-get install -y "..deb_package)
 
     elseif utils.distro == "suse" then
-        utils:RunCommand("zypper --non-interactive install "..suse_package)
+        success = utils:RunCommand("zypper --non-interactive install "..suse_package)
 
     elseif utils.distro == "fedora" then
-        utils:RunCommand("dnf install -y "..rpm_package)
-
+        success = utils:RunCommand("dnf install -y "..rpm_package)
+    else
+        utils:print_warning("Unable to install package due to unknown distro")
     end
+
+    return success
 end
 
-function CacheDistro()
+local function CacheDistro()
     --# we dont need to read os-release everytime
     --# hopefully this works
     local distro = string.lower(utils:read_file("/etc/os-release"))
@@ -161,15 +166,24 @@ function CacheDistro()
         
     elseif string.find(distro, "fedora") then
         utils.distro = "fedora"
-
     else
         utils.distro = "unknown"
-
     end
 
-    if string.find(distro, "ubuntu_codename=jammy") then
-        utils.is_jammy = true
+    for line in io.lines("/etc/os-release") do
+        --# going to need the codename later
+        line = string.lower(line)
+
+        if string.find(line, "ubuntu_codename=") or string.find(line, "debian_codename=")  then
+            local codename = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            utils.distro_codename = utils:CleanString(codename)
+            break
+        else
+            goto continue
+        end
+        ::continue::
     end
+
 end
 
 --# the prints, ported from the original functions,py
