@@ -98,7 +98,6 @@ local function SOF_Audio(platform)
     end
 
     utils:print_status("Installing SOF")
-    utils:print_status("Installing SOF firmware")
     utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
     --# install required packages
     if utils.distro == "ubuntu" then
@@ -244,16 +243,20 @@ local function AVS_Audio(platform)
 end
 
 local function AMD_Audio(platform, id)
-    --# 0 = stoneyridge (grunt)
-    --# 1 = picasso/zen+ (zork)
-    --# 2 = cezanne/zen3 (guybrush)
-    --# 3 = mendocino/zen2 (skyrim)
+    --# 1 = stoneyridge (grunt)
+    --# 2 = picasso/zen+ (zork)
+    --# 3 = cezanne/zen3 (guybrush)
+    --# 4 = mendocino/zen2 (skyrim)
     
-    if id >= 3 then
-       utils:print_status("Installing SOF firmware")
+    if id >= 4 then
+       utils:print_status("Installing SOF")
        utils:mk_dir("/lib/firmware/amd/sof/community")
        utils:mk_dir("/lib/firmware/amd/sof-tplg")
-       --# prepare and create new directories
+
+       utils:copy_dir("conf/amd-sof/fw", "/lib/firmware/amd/sof/community")
+       utils:copy_dir("conf/amd-sof/tplg", "/lib/firmware/amd/sof/sof-tplg")
+
+       --# prepare and copy firmware and topology
 
        utils:print_status("Installing modprobe config")
        utils:copy_file("conf/amd-sof/mdn-sof.conf", "/etc/modprobe.d/mdn-sof.conf")
