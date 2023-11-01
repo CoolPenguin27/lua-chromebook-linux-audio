@@ -5,6 +5,7 @@ local utils = {}
 
 utils.distro = "unknown"
 utils.distro_codename = "unknown"
+utils.version_codename = "unknown"
 function utils:RunCommand(command, only_output)
 --# stack overflow https://stackoverflow.com/questions/7607384/getting-return-status-and-program-output
     local handle = io.popen(command)
@@ -170,14 +171,20 @@ local function CacheDistro()
         utils.distro = "unknown"
     end
 
+
     for line in io.lines("/etc/os-release") do
         --# going to need the codename later
         line = string.lower(line)
 
         if string.find(line, "ubuntu_codename=") or string.find(line, "debian_codename=")  then
+            if utils.version_codename ~= "unknown" then
+                goto continue
+            end
             local codename = string.sub(line, (string.find(line, "=") + 1), string.len(line))
             utils.distro_codename = utils:CleanString(codename)
-            break
+        elseif string.find(line, "version_codename=") then
+            local codename = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            utils.version_codename = utils:CleanString(codename)
         else
             goto continue
         end

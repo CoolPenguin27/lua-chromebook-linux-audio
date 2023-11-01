@@ -257,9 +257,6 @@ local function AMD_Audio(platform, id)
        utils:copy_dir("conf/amd-sof/tplg", "/lib/firmware/amd/sof/sof-tplg")
 
        --# prepare and copy firmware and topology
-
-       utils:print_status("Installing modprobe config")
-       utils:copy_file("conf/amd-sof/mdn-sof.conf", "/etc/modprobe.d/mdn-sof.conf")
     end
 
     DownloadUCMRepo()
@@ -427,7 +424,7 @@ if SOF_Platforms[curr_board] then
 end
 
 
-if utils.distro_codename == "bookworm" then
+if utils.distro_codename == "bookworm" or utils.version_codename == "bookworm" then
     utils:print_status("Hey! Most devices need a custom kernel for functional audio on Debian and Debian based distros like LMDE.")
 
     while true do
@@ -453,7 +450,7 @@ if utils.distro_codename == "bookworm" then
         --# waiting for confirmation
 
     end
-    elseif utils.distro_codename == "jammy" then
+    elseif utils.distro_codename == "jammy" or utils.version_codename == "jammy" then
         --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
 
         utils:print_status("Updating libasound2 (might take a while)")
