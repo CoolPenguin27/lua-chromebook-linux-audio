@@ -6,6 +6,17 @@ local utils = {}
 utils.distro = "unknown"
 utils.distro_codename = "unknown"
 utils.version_codename = "unknown"
+utils.version_number = "unknown"
+
+local distro_names = {
+    ubuntu = "ubuntu",
+    arch = "arch",
+    fedora = "fedora",
+    debian = "debian",
+    void = "void",
+    suse = "suse"
+}
+
 function utils:RunCommand(command, only_output)
 --# stack overflow https://stackoverflow.com/questions/7607384/getting-return-status-and-program-output
     local handle = io.popen(command)
@@ -92,7 +103,7 @@ end
 function utils:copy_dir(og_dir, new_dir)
     --# opens said file and reads it
     if not utils:RunCommand("cp -r "..og_dir.." "..new_dir) then
-        utils:print_error("error copying "..og_dir.." to "..new_dir)
+        utils:print_error("Error copying "..og_dir.." to "..new_dir)
         os.exit(false)
     end
     return true
@@ -140,51 +151,81 @@ function utils:install_package(arch_package, deb_package, rpm_package, suse_pack
     elseif utils.distro == "fedora" then
         success = utils:RunCommand("dnf install -y "..rpm_package)
     else
-        utils:print_warning("Unable to install package due to unknown distro")
+        utils:print_warning("Unable to install package due to unknown distro.")
     end
 
     return success
+end
+
+function utils:ask_question(question, answer_one, answer_two, case_sensitive)
+    if answer_two == nil then
+        answer_two = math.huge
+        --# not there, make inputting it impossible
+    end 
+
+    while true do
+        utils:print_question(question)
+
+        local selection = io.read()
+
+        if not case_sensitive then
+            --# to protect the toasty speaker thing
+            selection = string.lower(selection)
+        end
+
+        if selection == answer_one then
+            return 1
+
+        elseif selection == answer_two then
+            return 2
+
+            else
+
+            utils:print_error("Invalid option: "..selection)
+
+        end
+
+    end
 end
 
 local function CacheDistro()
     --# we dont need to read os-release everytime
     --# hopefully this works
     local distro = string.lower(utils:read_file("/etc/os-release"))
-    if string.find(distro, "arch") then
-        utils.distro = "arch"
-
-    elseif string.find(distro, "void") then
-        utils.distro = "void"
-
-    elseif string.find(distro, "ubuntu") then
-        utils.distro = "ubuntu"
-
-    elseif string.find(distro, "debian") then
-        utils.distro = "debian"
-
-    elseif string.find(distro, "suse") then
-        utils.distro = "suse"
-        
-    elseif string.find(distro, "fedora") then
-        utils.distro = "fedora"
-    else
-        utils.distro = "unknown"
-    end
 
 
     for line in io.lines("/etc/os-release") do
         --# going to need the codename later
         line = string.lower(line)
 
+
+        --# we probably need these at some point in the future
+
         if string.find(line, "ubuntu_codename=") or string.find(line, "debian_codename=")  then
             if utils.version_codename ~= "unknown" then
                 goto continue
             end
-            local codename = string.sub(line, (string.find(line, "=") + 1), string.len(line))
-            utils.distro_codename = utils:CleanString(codename)
+            local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            utils.distro_codename = utils:CleanString(result)
+        elseif string.find(line, "version_id=") then
+            local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            utils.version_number = tonumber(utils:CleanString(result))
         elseif string.find(line, "version_codename=") then
-            local codename = string.sub(line, (string.find(line, "=") + 1), string.len(line))
-            utils.version_codename = utils:CleanString(codename)
+            local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            utils.version_codename = utils:CleanString(result)
+        elseif string.find(line, "id=") then
+            local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            if distro_names[result] ~= nil then
+                utils.distro = result
+            end
+        elseif string.find(line, "id_like=") then
+            if utils.distro == "unknown" then
+                --# only if the distro wasnt found yet
+                local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+                if distro_names[result] ~= nil then
+                    utils.distro = result
+                end
+            end
         else
             goto continue
         end
@@ -213,7 +254,6 @@ end
 function utils:print_header(string)
     print("\27[95m" .. string .. "\27[0m")
 end
-
 
 CacheDistro()
 return utils

@@ -58,8 +58,6 @@ local Current_CLArgs = {}
 local debian_kernel = "https://tree123.org/chrultrabook/debian-kernel/linux-image-6.5.4-chrultrabook_6.5.4-1_amd64.deb"
 local libasound2_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2_1.2.8-1pop1~1669155503~22.04~a04c9a1_amd64.deb"
 local libasound2_data_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2-data_1.2.8-1pop1~1669155503~22.04~a04c9a1_all.deb"
-local linux_image_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/070916d1e493bfa9309c831452e8f295e12af3be/linux-image-6.5.4-76060504-generic_6.5.4-76060504.202309191142~1695998943~22.04~070916d_amd64.deb"
-local linux_modules_url = "https://apt-origin.pop-os.org/release/pool/jammy/linux/070916d1e493bfa9309c831452e8f295e12af3be/linux-modules-6.5.4-76060504-generic_6.5.4-76060504.202309191142~1695998943~22.04~070916d_amd64.deb"
 --# ubuntu 22.04 stuff 
 local apl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/apl/dsp_basefw.bin"
 local skl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/skl/dsp_basefw.bin"
@@ -68,6 +66,13 @@ local kernel_version = utils:CleanString(string.lower(utils:RunCommand("uname -r
 --# have easy access to the current running kernel version
 -------------------------------------
 
+local function MassCopyDirs(dir, key)
+    for index, folder in ipairs(dir[key]) do
+        utils:copy_dir("/tmp/chromebook-ucm-conf/"..key.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
+        --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
+    end
+    
+end
 
 local function DownloadUCMRepo()
     utils:print_status("Installing UCM configuration")
@@ -122,10 +127,7 @@ local function SOF_Audio(platform)
         end
     end
 
-    for index, folder in ipairs(SOF_Card_Folders[platform]) do
-        utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
-        --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
-    end
+    MassCopyDirs(SOF_Card_Folders, platform)
 
     if platform == "jsl" then
         --# JSL also needs a tplg build from upstream which have not been shipped in distros yet
@@ -162,39 +164,20 @@ local function AVS_Audio(platform)
 
     if utils:check_file_exists("/sys/bus/acpi/devices/MX98357A:00") then
         --# fun thing, the license states that the software maker is not liable to damages
+
         if Current_CLArgs["force_avs_install"] then
             utils:print_error("WARNING: Your device has max98357a and can cause permanent damage to your speakers if you set the volume too loud!")
-            while true do
+            local result = utils:ask_question('Type "I understand the risk of permanently damaging my speakers!" in all caps to continue:', "I UNDERSTAND THE RISK OF PERMANENTLY DAMAGING MY SPEAKERS!", nil, true)
 
-                utils:print_question('Type "I understand the risk of permanently damaging my speakers" in all caps to continue: ')
-        
-                local selection = io.read()
-        
-                if selection == "I UNDERSTAND THE RISK OF PERMANENTLY DAMAGING MY SPEAKERS" then
-                    override_avs = true
-                    break
-                end
-
-                --# waiting for confirmation
-
-            end
+            override_avs = true
 
             else
                 utils:print_error("WARNING: Your device has max98357a and can cause permanent damage to your speakers if you set the volume too loud! \nAs a safety precaution devices with max98357a have speakers disabled until a fix is in place.\nHeadphones and HDMI audio are safe from this.")
                 utils:print_question("If you want to disable this check, restart the script with --force-avs-install")
+                local result = utils:ask_question('Type "I Understand my speakers will not work since my device has max98357a!" in all caps to continue:', "I UNDERSTAND MY SPEAKERS WILL NOT WORK SINCE MY DEVICE HAS MAX98357A!", nil, true)
 
-                while true do
-                
-                    utils:print_question('Type "I Understand my speakers will not work since my device has max98357a!" in all caps to continue: ')
-            
-                    local selection = io.read()
-            
-                    if selection == "I UNDERSTAND MY SPEAKERS WILL NOT WORK SINCE MY DEVICE HAS MAX98357A!" then
-                        override_avs = false
-                        break
-                    end
-                    --# waiting for confirmation
-                end
+
+                override_avs = false
             end
 
 
@@ -202,6 +185,7 @@ local function AVS_Audio(platform)
 
     --# boring confusing if statement over now for the real stuff
     DownloadUCMRepo()
+
     utils:copy_dir("/tmp/chromebook-ucm-conf/avs", "/lib/firmware/intel/avs")
 
     utils:print_status("Installing topology")
@@ -261,10 +245,8 @@ local function AMD_Audio(platform, id)
 
     DownloadUCMRepo()
 
-    for index, folder in ipairs(AMD_Card_Folders[platform]) do
-        utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform.."/"..folder, "/usr/share/alsa/ucm2/conf.d/"..folder)
-        --# basically copies a folder in the ucm folder and puts it in the conf.d folder, it loops through a table made for the platform
-    end
+    MassCopyDirs(AMD_Card_Folders, platform)
+
     --# Common dmic split ucm
     utils:copy_dir("/tmp/chromebook-ucm-conf/dmic-common", "/usr/share/alsa/ucm2/conf.d/dmic-common")
 
@@ -300,31 +282,18 @@ local function APL_Audio(platform)
     utils:print_status("SOF: Stable, but doesn't work with headphones.")
     utils:print_status("AVS: Unstable, can damage speakers, but works with all audio hardware.")
     utils:print_error("Speakers are disabled on AVS as a safety precaution. (use --force-avs-install to override) \nSpeakers will still work on SOF Though.")
-    while true do
-        utils:print_question("Which driver would you like to use? [SOF/AVS]")
+    local result = utils:ask_question("Which driver would you like to use? [SOF/AVS]", "SOF", "AVS")
 
-        local selection = io.read()
-
-        if string.lower(selection) == "sof" then
-            utils:print_status("Using SOF.")
-            os.remove("/etc/modprobe.d/snd-avs.conf")
-            SOF_Audio("apl")
-            utils:copy_file("conf/sof/apl-sof.conf", "/etc/modprobe.d/apl-sof.conf")
-            break
-
-            elseif string.lower(selection) == "avs" then
-                utils:print_status("Using AVS.")
-                os.remove("/etc/modprobe.d/snd-sof.conf")
-                os.remove("/etc/modprobe.d/apl-sof.conf")
-                AVS_Audio(platform)
-                break
-
-            else
-
-            utils:print_error("Invalid option: "..selection)
-
-        end
-
+    if result == 1 then
+        utils:print_status("Using SOF.")
+        os.remove("/etc/modprobe.d/snd-avs.conf")
+        SOF_Audio("apl")
+        utils:copy_file("conf/sof/apl-sof.conf", "/etc/modprobe.d/apl-sof.conf")
+    elseif result == 2 then
+        utils:print_status("Using AVS.")
+        os.remove("/etc/modprobe.d/snd-sof.conf")
+        os.remove("/etc/modprobe.d/apl-sof.conf")
+        AVS_Audio(platform)
     end
 
     --# time to move back to the main thread
@@ -361,7 +330,7 @@ local function HandleCLArgs()
             elseif args == "--enable-debug" or args == "--disable-debug" then
             Current_CLArgs["debug"] = (args == "--enable-debug") or false
 
-            elseif args == "--      force-avs-install" then
+            elseif args == "--force-avs-install" then
             Current_CLArgs["force_avs_install"] = true
 
             elseif Current_CLArgs["board_name"] == args then
@@ -395,7 +364,7 @@ end
 --# check over, start actual stuff
 --------------------------------------
 
-utils:print_warning("WARNING: this audio script is not fully functional yet!")
+utils:print_warning("WARNING: This audio script is not fully functional yet!")
 
 local curr_board = board_generations[sys_board]
 
@@ -405,7 +374,6 @@ if curr_board == nil then
     os.exit(false)
 end
 --# if its not there dont bother
-
 if SOF_Platforms[curr_board] then
     SOF_Audio(curr_board)
 
@@ -419,53 +387,40 @@ if SOF_Platforms[curr_board] then
         Bras_Audio(curr_board)
 
     elseif curr_board == "apl" then    
-        APL_Audio(curr_board)
-        
+        APL_Audio(curr_board)     
 end
 
 
 if utils.distro_codename == "bookworm" or utils.version_codename == "bookworm" then
     utils:print_status("Hey! Most devices need a custom kernel for functional audio on Debian and Debian based distros like LMDE.")
+    local result = utils:ask_question("Would you like the script to install the kernel for you? [Y/N]", "Y", "N")
 
-    while true do
-
-        utils:print_question("Would you like the script to install the kernel for you? [Y/N]")
-
-        local selection = io.read()
-
-        if string.lower(selection) == "y" then
-            utils:print_status("Starting kernel install")
-            utils:print_status("Downloading kernel... (may take a while)")
-            utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
-            utils:print_status("Installing kernel... (may take a while)")
-            utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb")
-            break
-        elseif string.lower(selection) == "n" then
-            utils:print_status("Skipping kernel installation")
-            break
-        else
-            utils:print_error("Invalid option: "..selection)
-        end
-
-        --# waiting for confirmation
-
+    if result == 1 then
+        utils:print_status("Starting kernel install")
+        utils:print_status("Downloading kernel... (may take a while)")
+        utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
+        utils:print_status("Installing kernel... (may take a while)")
+        utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb")
+    elseif result == 2 then
+        utils:print_status("Skipping kernel installation")
     end
+
     elseif utils.distro_codename == "jammy" or utils.version_codename == "jammy" then
         --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
 
         utils:print_status("Updating libasound2 (might take a while)")
     
         --# might need curl
-        utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
-        utils:download_file(libasound2_data_url, "/tmp/libasound2.deb")
+        utils:download_file(libasound2_url, "/tmp/libasound2.deb")
+        utils:download_file(libasound2_data_url, "/tmp/libasound2_data.deb")
         utils:install_package(nil, "/tmp/libasound2*.deb")
     
         if string.find(string.sub(kernel_version, 1, 2), "5.") then
             --# if on a 5.X kernel then update
             utils:print_status("Updating linux kernel (might take a while)")
-            utils:download_file(linux_image_url, "/tmp/linux_image.deb")
-            utils:download_file(linux_modules_url, "/tmp/linux_modules.deb")
-            utils:install_package(nil, "/tmp/linux_*.deb")
+            utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
+            utils:print_status("Installing kernel... (may take a while)")
+            utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb")
         end
 end
 
