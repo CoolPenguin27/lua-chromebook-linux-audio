@@ -33,12 +33,18 @@ function utils:RunCommand(command, only_output)
     --# easy way to remove those werid indents when getting the result
 end
 
-function utils:CleanString(string)
+function utils:CleanString(string, keep_quotation, keep_comma)
     --# i figured this out because my RunCommand(product_name) wasnt matching up with a board (and if sys_board == "delbin" didnt work)
     local new_string = string.gsub(string, "\n", "")
     new_string = string.gsub(new_string, " ", "")
-    new_string = string.gsub(new_string, '"', "")
-    new_string = string.gsub(new_string, ",", "")
+    new_string = string.gsub(new_string, "\x00", "")
+    if not keep_quotation then
+        new_string = string.gsub(new_string, '"', "")
+    end
+    if not keep_comma then
+        new_string = string.gsub(new_string, ",", "")
+
+    end    
     return new_string
 end
 

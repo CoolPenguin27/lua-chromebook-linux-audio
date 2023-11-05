@@ -32,6 +32,7 @@ local AMD_Platforms = {
     cezanne = 3,
     mendocino = 4
 }
+
 --# all platform dictionaries
 
 local SOF_Card_Folders = {
@@ -309,6 +310,14 @@ local function APL_Audio(platform)
 
 end
 
+local function mt8183_audio()
+    DownloadUCMRepo()
+    utils:copy_dir("/tmp/chromebook-ucm-conf/mt8183/mt8183_da7219_r", "/usr/share/alsa/ucm2/conf.d/mt8183_da7219_r")
+    utils:copy_dir("/tmp/chromebook-ucm-conf/mt8183/mt8183_mt6358_t", "/usr/share/alsa/ucm2/conf.d/mt8183_mt6358_t")
+    --# time to move back to the main thread
+
+end
+
 local function PreloadBoardDict()
     --# parsing the json file without any special modules
     for line in io.lines("conf/board-generations.json") do
@@ -365,9 +374,18 @@ utils:print_warning("NOTE: This version of the script may not get updated freque
 -------------------------------------
 local is_root = utils:RunCommand("echo $EUID", true)
 --# for some reason os.getenv doesnt work for this check.
-local sys_board = Current_CLArgs["board_name"] or utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")))
-if sys_board == Current_CLArgs["board_name"] then
+if Current_CLArgs["board_name"] ~= nil then
+    sys_board = Current_CLArgs["board_name"]
     utils:print_warning("Board name overriden to: "..sys_board)
+
+    else
+        if string.find(kernel_version, "x86_64") then
+            sys_board = utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")), false, true)
+            elseif string.find(kernel_version, "arm") or string.find(kernel_version, "arm") then
+                sys_board = utils:CleanString(string.lower(utils:read_file("/sys/firmware/devicetree/base/compatible")))
+            else
+            utils:print_error("This script doesnt support your device's architecture.")
+        end
 end
 
 if is_root ~= 0 then
@@ -400,7 +418,11 @@ if SOF_Platforms[curr_board] then
         Bras_Audio(curr_board)
 
     elseif curr_board == "apl" then    
-        APL_Audio(curr_board)     
+        APL_Audio(curr_board)    
+
+    elseif curr_board == "mt8183" then 
+        mt8183_audio()
+
 end
 
 
