@@ -151,7 +151,7 @@ function utils:install_package(arch_package, deb_package, rpm_package, suse_pack
     elseif utils.distro == "fedora" then
         success = utils:RunCommand("dnf install -y "..rpm_package)
     else
-        utils:print_warning("Unable to install package due to unknown distro.")
+        utils:print_warning("Unable to install package :"..arch_package.." due to unknown distro, please install it manually.")
     end
 
     return success
@@ -215,6 +215,7 @@ local function CacheDistro()
             utils.version_codename = utils:CleanString(result)
         elseif string.find(line, "id=") then
             local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+            result = utils:CleanString(result)
             if distro_names[result] ~= nil then
                 utils.distro = result
             end
@@ -222,6 +223,7 @@ local function CacheDistro()
             if utils.distro == "unknown" then
                 --# only if the distro wasnt found yet
                 local result = string.sub(line, (string.find(line, "=") + 1), string.len(line))
+                result = utils:CleanString(result)
                 if distro_names[result] ~= nil then
                     utils.distro = result
                 end

@@ -55,7 +55,7 @@ local RPL_TGL_SysLinks = {"cs35l41", "max98357a-rt5682-4ch", "max98357a-rt5682",
 
 local Current_CLArgs = {}
 --# current args for the session
-local debian_kernel = "https://tree123.org/chrultrabook/debian-kernel/linux-image-6.5.4-chrultrabook_6.5.4-1_amd64.deb"
+local debian_kernel = "https://ethanthesleepy.one/public/chrultrabook/debian-kernel/linux-image-6.6.0-chrultrabook_6.6.0-1_amd64.deb"
 local libasound2_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2_1.2.8-1pop1~1669155503~22.04~a04c9a1_amd64.deb"
 local libasound2_data_url = "https://apt-origin.pop-os.org/release/pool/jammy/libasound2/a04c9a151faa0d94e28e3f7ac411dc8aa083f064/libasound2-data_1.2.8-1pop1~1669155503~22.04~a04c9a1_all.deb"
 --# ubuntu 22.04 stuff 
@@ -75,14 +75,25 @@ local function MassCopyDirs(dir, key)
 end
 
 local function DownloadUCMRepo()
+    local branch_param = ""
     utils:print_status("Installing UCM configuration")
+
+    if Current_CLArgs["branch_name"] ~= nil then
+        utils:print_warning("Forcing branch to: "..Current_CLArgs["branch_name"])
+        branch_param = "-b "..Current_CLArgs["branch_name"]
+    end
+    
     if utils:check_file_exists("/tmp/chromebook-ucm-conf") then
         utils:remove_folder("/tmp/chromebook-ucm-conf")
     end
     --# remove existing ucm folder
-    if not utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf /tmp/chromebook-ucm-conf") then
-        utils:print_error("Faiiled to download ucm repo")
+    if not utils:RunCommand("git clone https://github.com/WeirdTreeThing/chromebook-ucm-conf "..branch_param.." /tmp/chromebook-ucm-conf") then
+        utils:print_error("Faiiled to download ucm repo.")
         os.exit(false)
+    end
+
+    if utils:check_file_exists("/tmp/chromebook-ucm-conf/codecs") then
+        utils:copy_dir("/tmp/chromebook-ucm-conf/codecs", "/usr/share/alsa/ucm2/codecs")
     end
 end
 
@@ -134,11 +145,9 @@ local function SOF_Audio(platform)
         utils:copy_dir("conf/sof/tplg ", "/lib/firmware/intel/sof-tplg")
     end
 
-    --# Common dmic split ucm
-    utils:copy_dir("/tmp/chromebook-ucm-conf/dmic-common", "/usr/share/alsa/ucm2/conf.d/dmic-common")
+    --# Common ucm stuff 
+    utils:copy_dir("/tmp/chromebook-ucm-conf/common", "/usr/share/alsa/ucm2/common")
 
-    --# Common hdmi configurations
-    utils:copy_dir("/tmp/chromebook-ucm-conf/hdmi-common ", "/usr/share/alsa/ucm2/conf.d/hdmi-common")
 
     --# time to move back to the main thread
 end
@@ -286,13 +295,13 @@ local function APL_Audio(platform)
 
     if result == 1 then
         utils:print_status("Using SOF.")
-        os.remove("/etc/modprobe.d/snd-avs.conf")
+        utils:remove_folder("/etc/modprobe.d/snd-avs.conf")
         SOF_Audio("apl")
         utils:copy_file("conf/sof/apl-sof.conf", "/etc/modprobe.d/apl-sof.conf")
     elseif result == 2 then
         utils:print_status("Using AVS.")
-        os.remove("/etc/modprobe.d/snd-sof.conf")
-        os.remove("/etc/modprobe.d/apl-sof.conf")
+        utils:remove_folder("/etc/modprobe.d/snd-sof.conf")
+        utils:remove_folder("/etc/modprobe.d/apl-sof.conf")
         AVS_Audio(platform)
     end
 
@@ -324,7 +333,7 @@ end
 
 local function HandleCLArgs()
     for index, args in ipairs(arg) do
-        if args == "-b" then
+        if args == "--board" then
             Current_CLArgs["board_name"] = arg[index + 1]
 
             elseif args == "--enable-debug" or args == "--disable-debug" then
@@ -333,11 +342,15 @@ local function HandleCLArgs()
             elseif args == "--force-avs-install" then
             Current_CLArgs["force_avs_install"] = true
 
-            elseif Current_CLArgs["board_name"] == args then
+            elseif args == "--branch" then
+
+            Current_CLArgs["branch_name"] = arg[index + 1]
+
+            elseif Current_CLArgs["board_name"] == args or Current_CLArgs["branch_name"] == args then
                 --# make sure it isnt counted as an argument
             else
             print("Invalid Paramater: "..args)
-            print("current paramaters: \n -b new_board_name (force board_name) \n --enable-debug (enable audio debugging) \n --disable-debug (disable audio debugging) \n --force-avs-install (DANGEROUS: Force enable AVS install. MIGHT CAUSE PERMANENT DAMAGE TO SPEAKERS!) ")
+            print("current paramaters:\n --board new_board_name (force board_name)\n --enable-debug (enable audio debugging)\n --disable-debug (disable audio debugging)\n --force-avs-install (DANGEROUS: Force enable AVS install. MIGHT CAUSE PERMANENT DAMAGE TO SPEAKERS!)\n --branch branch_name (force a branch when downloading ucm repo [ONLY FOR DEVELOPERS/TESTERS])")
             os.exit(false)
 
         end
@@ -400,7 +413,9 @@ if utils.distro_codename == "bookworm" or utils.version_codename == "bookworm" t
         utils:print_status("Downloading kernel... (may take a while)")
         utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
         utils:print_status("Installing kernel... (may take a while)")
-        utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb")
+        if not utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb") then
+            utils:print_warning("Failed to install the kernel.") 
+         end
     elseif result == 2 then
         utils:print_status("Skipping kernel installation")
     end
@@ -413,14 +428,18 @@ if utils.distro_codename == "bookworm" or utils.version_codename == "bookworm" t
         --# might need curl
         utils:download_file(libasound2_url, "/tmp/libasound2.deb")
         utils:download_file(libasound2_data_url, "/tmp/libasound2_data.deb")
-        utils:install_package(nil, "/tmp/libasound2*.deb")
-    
+        if not utils:install_package(nil, "/tmp/libasound2*.deb") then
+            utils:print_warning("Failed to update libasound2.") 
+
+        end
         if string.find(string.sub(kernel_version, 1, 2), "5.") then
             --# if on a 5.X kernel then update
             utils:print_status("Updating linux kernel (might take a while)")
             utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
             utils:print_status("Installing kernel... (may take a while)")
-            utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb")
+            if not utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb") then
+               utils:print_warning("Failed to update the kernel.") 
+            end
         end
 end
 
