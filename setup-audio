@@ -377,11 +377,10 @@ local is_root = utils:RunCommand("echo $EUID", true)
 if Current_CLArgs["board_name"] ~= nil then
     sys_board = Current_CLArgs["board_name"]
     utils:print_warning("Board name overriden to: "..sys_board)
-
     else
-        if string.find(kernel_version, "x86_64") then
+        if utils:check_file_exists("/sys/devices/virtual/dmi/id/product_name") then
             sys_board = utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")), false, true)
-            elseif string.find(kernel_version, "arm") or string.find(kernel_version, "arm") then
+            elseif utils:check_file_exists("/sys/firmware/devicetree/base/compatible") then
                 sys_board = utils:CleanString(string.lower(utils:read_file("/sys/firmware/devicetree/base/compatible")))
             else
             utils:print_error("This script doesnt support your device's architecture.")
