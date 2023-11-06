@@ -5,7 +5,7 @@
 --# important stuff
 local utils = require("utils")
 --# get utils module aka the functions.py of the script
-local board_generations = {}
+local board_generations = require("conf/boards")
 
 local SOF_Platforms = {
     glk = "glk",
@@ -318,28 +318,6 @@ local function mt8183_audio()
 
 end
 
-local function PreloadBoardDict()
-    --# parsing the json file without any special modules
-    for line in io.lines("conf/board-generations.json") do
-        if line == "{" or line == "}" then
-            --# skip 
-            goto continue
-        end
-
-        local otherhalf = string.sub(line, (string.find(line, ":") + 1), string.len(line))
-        --# get line of value
-        line = string.sub(line, 1, (string.find(line, ":") - 1))
-        --# get line of key 
-
-        line = utils:CleanString(line)
-        otherhalf = utils:CleanString(otherhalf)
-    
-        board_generations[line] = otherhalf
-
-        ::continue::
-    end
-end
-
 local function HandleCLArgs()
     for index, args in ipairs(arg) do
         if args == "--board" then
@@ -367,7 +345,6 @@ local function HandleCLArgs()
 end
 
 -------------------------------------
-PreloadBoardDict()
 HandleCLArgs()
 
 utils:print_warning("NOTE: This version of the script may not get updated frequently. \n If there's any problems, try the original version here: https://github.com/WeirdTreeThing/chromebook-linux-audio")
