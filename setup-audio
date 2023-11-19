@@ -20,17 +20,17 @@ local AVS_Platforms = {
     kbl = "kbl"
 }
 
-local Bras_Platforms = {
+local hifi2_Platforms = {
     bdw = "bdw",
     byt = "byt",
     bsw = "bsw"
 }
 
 local AMD_Platforms = {
-    stoney = 1,
-    picasso = 2,
-    cezanne = 3,
-    mendocino = 4
+    stoney = "stoney",
+    picasso = "picasso",
+    cezanne = "cezanne",
+    mendocino = "mendocino"
 }
 
 --# all platform dictionaries
@@ -64,6 +64,7 @@ local apl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-
 local skl_dsp = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/intel/avs/skl/dsp_basefw.bin"
 --# avs stuff
 local kernel_version = utils:CleanString(string.lower(utils:RunCommand("uname -r", true)))
+local sys_codename = nil
 --# have easy access to the current running kernel version
 -------------------------------------
 
@@ -92,10 +93,6 @@ local function DownloadUCMRepo()
         utils:print_error("Faiiled to download ucm repo.")
         os.exit(false)
     end
-
-    if utils:check_file_exists("/tmp/chromebook-ucm-conf/codecs") then
-        utils:copy_dir("/tmp/chromebook-ucm-conf/codecs", "/usr/share/alsa/ucm2/codecs")
-    end
 end
 
 local function SOF_Audio(platform)
@@ -114,28 +111,37 @@ local function SOF_Audio(platform)
         os.exit(true)
     end
 
-    utils:print_status("Installing SOF")
-    utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
     --# install required packages
-    if utils.distro == "ubuntu" then
-        --# linux-firmware has different names on ubuntu (and ubuntu based distro's like popOS)
-        utils:install_package(nil, "linux-firmware")
-    else
-        utils:install_package("linux-firmware", "firmware-linux-free firmware-linux-nonfree", "linux-firmware", "kernel-firmware-all", "linux-firmware")
+    if not utils:check_file_exists("/lib/firmware/intel/sof") then
+        utils:print_status("Installing SOF")
+        utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
     end
-
-    utils:install_package("alsa-utils", "alsa-utils", "alsa-utils", "alsa-utils", "alsa-utils")
 
     --# force the SOF Driver
     utils:print_status("Installing modprobe config")
     utils:copy_file("conf/sof/snd-sof.conf", "/etc/modprobe.d/snd-sof.conf")
 
     DownloadUCMRepo()
+    utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform, "/usr/share/alsa/ucm2/conf.d/")
+
+    if utils:check_file_exists("/tmp/chromebook-ucm-conf/codecs") then
+        utils:copy_dir("/tmp/chromebook-ucm-conf/codecs", "/usr/share/alsa/ucm2/codecs")
+    end
+
+    if utils:check_file_exists("/tmp/chromebook-ucm-conf/sof-rt5682") then
+        utils:copy_dir("/tmp/chromebook-ucm-conf/sof-rt5682", "/usr/share/alsa/ucm2/conf.d/sof-rt5682")
+    end
 
     if platform == "adl" then
         --# for some reason rpl devices load the same file as regular adl devices but require a different file name, so we need to create system links
         for index, value in ipairs(RPL_TGL_SysLinks) do
-            utils:RunCommand("ln -s /lib/firmware/intel/sof-tplg/sof-adl-"..value..".tplg /lib/firmware/intel/sof-tplg/sof-rpl-"..value..".tplg")
+            if utils:check_file_exists("/lib/firmware/intel/sof-tplg/sof-adl-"..value..".tplg") then
+                utils:RunCommand("ln -s /lib/firmware/intel/sof-tplg/sof-adl-"..value..".tplg /lib/firmware/intel/sof-tplg/sof-rpl-"..value..".tplg")
+
+                elseif utils:check_file_exists("/lib/firmware/intel/sof-tplg/sof-adl-"..value..".tplg.xz") then
+                    utils:RunCommand("ln -s /lib/firmware/intel/sof-tplg/sof-adl-"..value..".tplg.xz /lib/firmware/intel/sof-tplg/sof-rpl-"..value..".tplg.xz")
+
+            end
         end
     end
 
@@ -195,8 +201,7 @@ local function AVS_Audio(platform)
 
     --# boring confusing if statement over now for the real stuff
     DownloadUCMRepo()
-
-    utils:copy_dir("/tmp/chromebook-ucm-conf/avs", "/lib/firmware/intel/avs")
+    utils:copy_dir("/tmp/chromebook-ucm-conf/avs", "/usr/share/alsa/ucm2/conf.d/")
 
     utils:print_status("Installing topology")
     utils:copy_dir("conf/avs/tplg", "/usr/share/alsa/ucm2/conf.d")
@@ -236,13 +241,13 @@ local function AVS_Audio(platform)
     --# time to move back to the main thread
 end
 
-local function AMD_Audio(platform, id)
+local function AMD_Audio(platform)
     --# 1 = stoneyridge (grunt)
     --# 2 = picasso/zen+ (zork)
     --# 3 = cezanne/zen3 (guybrush)
     --# 4 = mendocino/zen2 (skyrim)
     
-    if id >= 4 then
+    if platform == "mendocino" then
        utils:print_status("Installing SOF")
        utils:mk_dir("/lib/firmware/amd/sof/community")
        utils:mk_dir("/lib/firmware/amd/sof-tplg")
@@ -254,6 +259,7 @@ local function AMD_Audio(platform, id)
     end
 
     DownloadUCMRepo()
+    utils:copy_dir("/tmp/chromebook-ucm-conf/"..platform, "/usr/share/alsa/ucm2/conf.d/")
 
     MassCopyDirs(AMD_Card_Folders, platform)
 
@@ -263,27 +269,29 @@ local function AMD_Audio(platform, id)
     --# time to move back to the main thread
 end
 
-local function Bras_Audio(platform)
+local function hifi2_Audio(platform)
     if Current_CLArgs["debug"] ~= nil then
         if Current_CLArgs["debug"] == true then
             utils:print_status("Enabling SOF BSW debugging")
-            utils:copy_file("conf/sof/bsw-sof-dbg.conf", "/etc/modprobe.d/bsw-sof-dbg.conf")
+            utils:copy_file("conf/sof/hifi2-sof-dbg.conf", "/etc/modprobe.d/hifi2-sof-dbg.conf")
 
             else
             utils:print_status("Disabling SOF BSW debugging")
-            utils:remove_folder("/etc/modprobe.d/bsw-sof-dbg.conf")
+            utils:remove_folder("/etc/modprobe.d/hifi2-sof-dbg.conf")
         end
 
         utils:print_status("Done, please reboot for changes to take effect.")
         os.exit(true)
     end
 
-    utils:print_status("Fixing braswell/baytrail/broadwell audio")
-
-    utils:install_package("alsa-ucm-conf", "alsa-ucm-conf", "alsa-ucm", "alsa-ucm-conf", "alsa-ucm-conf")
-    utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
+    if not utils:check_file_exists("/lib/firmware/intel/sof") then
+        utils:print_status("Installing SOF")
+        utils:install_package("sof-firmware", "firmware-sof-signed", "alsa-sof-firmware", "sof-firmware", "sof-firmware")
+    end
     
-    utils:copy_file("conf/sof/bsw-sof.conf", "/etc/modprobe.d/bsw-sof.conf")
+    utils:print_status("Forcing SOF driver in debug mode")
+
+    utils:copy_file("conf/sof/hifi2-sof.conf", "/etc/modprobe.d/hifi2-sof.conf")
     --# time to move back to the main thread
 end
 
@@ -344,104 +352,121 @@ local function HandleCLArgs()
     end
 end
 
+local function InstallDebKernel()
+    utils:print_status("Updating linux kernel (might take a while)")
+    utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
+    utils:print_status("Installing kernel... (may take a while)")
+    if not utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb") then
+       utils:print_warning("Failed to update the kernel.") 
+    end
+end
+
+local function UbuntuLTS()
+    --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
+
+    utils:print_status("Updating libasound2 (might take a while)")
+    
+    --# might need curl
+    utils:download_file(libasound2_url, "/tmp/libasound2.deb")
+    utils:download_file(libasound2_data_url, "/tmp/libasound2_data.deb")
+    if not utils:install_package(nil, "/tmp/libasound2*.deb") then
+        utils:print_warning("Failed to update libasound2.") 
+     end
+
+    if string.find(string.sub(kernel_version, 1, 2), "5.") then
+        --# if on a 5.X kernel then update
+        InstallDebKernel()
+    end
+end
+
+local function DebianBookworm()
+    --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
+    utils:print_status("Hey! Most devices need a custom kernel for functional audio on Debian and Debian based distros like LMDE.")
+    local result = utils:ask_question("Would you like the script to install the kernel for you? [Y/N]", "Y", "N")
+
+    if result == 1 then
+        InstallDebKernel()
+    elseif result == 2 then
+        utils:print_status("Skipping kernel installation")
+    end
+
+end
+
+local function GetCodename()
+    if Current_CLArgs["board_name"] ~= nil then
+        sys_codename = Current_CLArgs["board_name"]
+        utils:print_warning("Board name overriden to: "..sys_codename)
+        return nil
+    end
+
+    if utils:check_file_exists("/sys/devices/virtual/dmi/id/product_name") then
+        --# x86 arch
+        sys_codename = utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")))
+
+        elseif utils:check_file_exists("/sys/firmware/devicetree/base/compatible") then
+            --# arm/aarch
+            sys_codename = utils:CleanString(string.lower(utils:read_file("/sys/firmware/devicetree/base/compatible")), false, true)
+            
+        else
+            utils:print_error("This script doesnt support your device's architecture.")
+            os.exit(false)
+    end
+end
+    
+local function FindPlatformForFunction()
+    local curr_board = board_generations[sys_codename]
+
+    if curr_board == nil then
+        --# doesnt exist
+        print("Unknown/Unsupported Platform: "..sys_codename)
+        os.exit(false)
+    end
+    --# if its not there dont bother
+    if SOF_Platforms[curr_board] then
+        SOF_Audio(curr_board)
+
+        elseif AVS_Platforms[curr_board] then
+            AVS_Audio(curr_board)
+
+        elseif AMD_Platforms[curr_board] then
+            AMD_Audio(curr_board)
+
+        elseif hifi2_Platforms[curr_board] then
+            hifi2_Audio(curr_board)
+
+        elseif curr_board == "apl" then    
+            APL_Audio(curr_board)    
+
+        elseif curr_board == "mt8183" then 
+            mt8183_audio()
+
+    end
+end
 -------------------------------------
 HandleCLArgs()
 
 utils:print_warning("NOTE: This version of the script may not get updated frequently. \n If there's any problems, try the original version here: https://github.com/WeirdTreeThing/chromebook-linux-audio")
 -------------------------------------
-local is_root = utils:RunCommand("echo $EUID", true)
 --# for some reason os.getenv doesnt work for this check.
-if Current_CLArgs["board_name"] ~= nil then
-    sys_board = Current_CLArgs["board_name"]
-    utils:print_warning("Board name overriden to: "..sys_board)
-    else
-        if utils:check_file_exists("/sys/devices/virtual/dmi/id/product_name") then
-            sys_board = utils:CleanString(string.lower(utils:read_file("/sys/devices/virtual/dmi/id/product_name")))
-            elseif utils:check_file_exists("/sys/firmware/devicetree/base/compatible") then
-                sys_board = utils:CleanString(string.lower(utils:read_file("/sys/firmware/devicetree/base/compatible")), false, true)
-            else
-            utils:print_error("This script doesnt support your device's architecture.")
-        end
-end
-
-if is_root ~= 0 then
+if utils:RunCommand("echo $EUID", true) ~= 0 then
     utils:print_error("This script must be ran with Sudo/Root permissions!")
     os.exit(false)
 end
 --# check over, start actual stuff
 --------------------------------------
-
-utils:print_warning("WARNING: This audio script is not fully functional yet!")
-
-local curr_board = board_generations[sys_board]
-
-if curr_board == nil then
-    --# doesnt exist
-    print("Unknown/Unsupported Platform: "..sys_board)
-    os.exit(false)
-end
---# if its not there dont bother
-if SOF_Platforms[curr_board] then
-    SOF_Audio(curr_board)
-
-    elseif AVS_Platforms[curr_board] then
-        AVS_Audio(curr_board)
-
-    elseif AMD_Platforms[curr_board] then
-        AMD_Audio(curr_board, AMD_Platforms[curr_board])
-
-    elseif Bras_Platforms[curr_board] then
-        Bras_Audio(curr_board)
-
-    elseif curr_board == "apl" then    
-        APL_Audio(curr_board)    
-
-    elseif curr_board == "mt8183" then 
-        mt8183_audio()
-
-end
+utils:print_warning("WARNING: You may encounter audio issues, even after running this script. Please report any issues on github.")
 
 
-if utils.distro_codename == "bookworm" or utils.version_codename == "bookworm" then
-    utils:print_status("Hey! Most devices need a custom kernel for functional audio on Debian and Debian based distros like LMDE.")
-    local result = utils:ask_question("Would you like the script to install the kernel for you? [Y/N]", "Y", "N")
+GetCodename()
+FindPlatformForFunction()
 
-    if result == 1 then
-        utils:print_status("Starting kernel install")
-        utils:print_status("Downloading kernel... (may take a while)")
-        utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
-        utils:print_status("Installing kernel... (may take a while)")
-        if not utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb") then
-            utils:print_warning("Failed to install the kernel.") 
-         end
-    elseif result == 2 then
-        utils:print_status("Skipping kernel installation")
-    end
+if (utils.distro_codename == "bookworm" or utils.version_codename == "bookworm") and not string.find(kernel_version, "chrultrabook") then
+    DebianBookworm()
 
     elseif utils.distro_codename == "jammy" or utils.version_codename == "jammy" then
-        --# install more up to date Pop!_OS packages if on Ubuntu 22.04 (or on linux mint)
 
-        utils:print_status("Updating libasound2 (might take a while)")
-    
-        --# might need curl
-        utils:download_file(libasound2_url, "/tmp/libasound2.deb")
-        utils:download_file(libasound2_data_url, "/tmp/libasound2_data.deb")
-        if not utils:install_package(nil, "/tmp/libasound2*.deb") then
-            utils:print_warning("Failed to update libasound2.") 
-
-        end
-        if string.find(string.sub(kernel_version, 1, 2), "5.") then
-            --# if on a 5.X kernel then update
-            utils:print_status("Updating linux kernel (might take a while)")
-            utils:download_file(debian_kernel, "/tmp/debian-chrultrabook-kernel.deb")
-            utils:print_status("Installing kernel... (may take a while)")
-            if not utils:install_package(nil, "/tmp/debian-chrultrabook-kernel.deb") then
-               utils:print_warning("Failed to update the kernel.") 
-            end
-        end
+    UbuntuLTS()
 end
-
-
 
 if utils:check_file_exists("/usr/bin/wireplumber") then
     --# installs wireplumber config to increase headroom

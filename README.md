@@ -18,13 +18,11 @@ Please look at the [Chrultrabook compatibility chart](https://chrultrabook.githu
 1. Arch Linux
 2. Fedora 38
 3. PopOS
-4. Debian 12[^1]
+4. Debian 12
 5. Ubuntu (23.10 preferred but 22.04 LTS should also work)
 6. Linux Mint 
 7. OpenSUSE
 8. Void Linux
-
-[^1]: Debian will require a custom kernel that you can install [here](https://tree123.org/chrultrabook/debian-kernel/linux-image-6.5.4-chrultrabook_6.5.4-1_amd64.deb) (The script will prompt you to install it if it detects the distro is Debian 12 or based on it).
 
 # Other Distros
 Other distros will likely work but will require you to manually install packages.

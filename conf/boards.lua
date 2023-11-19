@@ -231,6 +231,10 @@ local boards = {
     ["dewatt"] = "cezanne",
     ["guybrush"] = "cezanne",
     ["nipperkin"] = "cezanne",
+    ["crystaldrift"] = "mendocino",
+    ["markarth"] = "mendocino",
+    ["skyrim"] = "mendocino",
+    ["whiterun"] = "mendocino",
     ["frostflow"] = "mendocino",
     ["google,krane-sku176google,kranemediatek,mt8183"] = "mt8183"
 }
