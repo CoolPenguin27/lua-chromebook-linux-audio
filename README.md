@@ -1,4 +1,6 @@
-<h1 align="center">Lua script to enable audio support on Chrome devices</h1>
+<h1 align="center">(Archived) Lua script to enable audio support on Chrome devices</h1>
+
+## Repo is archived since I lost interest in updating it to match the original script
 
 This is a lua conversion of the original [chromebook-linux-audio](https://github.com/WeirdTreeThing/chromebook-linux-audio) script.
 May not get updated so you should use the original.
